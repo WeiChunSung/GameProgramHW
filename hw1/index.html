@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+<style>
+#info {
+  position: absolute;
+  top: 0px;
+  width: 100%;
+  padding: 10px;
+  text-align: center;
+  color: #ffff00
+}
+
+body {
+  overflow: hidden;
+}
+</style>
+</head>
+
+<body>
+
+<div id="info">Puck Physics.js
+<br>
+<br>
+<button id="pause" style="width:40%">Check to start sound</button>
+</div>
+<audio id="collisionsound" style="display:none">
+<source src="https://jyunming-chen.github.io/game3js/gameHWhelpers/sounds/collision3.wav" type="audio/wav">
+</audio>
+<script src="https://threejs.org/build/three.min.js"></script>
+<script src="https://threejs.org/examples/js/controls/OrbitControls.js">
+</script>
+
+<script>
+
+// 螢幕
+var camera, scene, renderer;
+// 燈光
+var light, light2;
+var angle = 0;
+var pucks = [];
+var R = 8;
+// 聲音
+var collisionSound;
+
+// 圓盤類別////////////////////////////////////////////////////
+class Puck{
+  constructor(lightColor, posX, posZ, velX, velY) {
+    // light部分
+    this.pos = new THREE.Vector3(posX,0,posZ);
+    this.vel = new THREE.Vector3(velX,0,velY);
+    this.light = new THREE.PointLight( 0xffffff, 1);
+    this.light.position.set(50, 50, 50);
+    this.lightColor = lightColor;
+    this.puckMat = new THREE.MeshBasicMaterial();
+    this.puckMat.color = new THREE.Color().setHSL (this.lightColor,0.98,0.44);
+    // 圓盤部分
+    this.radiusTop = 16;
+    this.radiusBottom = 16;
+    this.height = 10;
+    this.radiusSegments = 20;
+    this.puck = new THREE.Mesh (new THREE.CylinderGeometry(this.radiusTop,this.radiusBottom,this.height,this.radiusSegments), this.puckMat);
+  }
+
+  createPuck(scene) {
+    scene.add(this.light);
+    scene.add (this.puck);
+    this.light.color.copy (this.puckMat.color);
+  }
+  
+  update(dt) {
+  	this.pos.add (this.vel.clone().multiplyScalar (dt));
+    if (this.pos.z < -165) {
+       this.vel.z *= - 1;
+       this.pos.z = -165;
+       collisionSound.play();
+    }
+    if (this.pos.x > 165) {
+       this.vel.x *= - 1;
+       this.pos.x = 165;
+       collisionSound.play();
+    }
+    if (this.pos.x < -165) {
+      this.vel.x *= - 1;
+      this.pos.x = -165;
+      collisionSound.play();
+    }
+    if (this.pos.z > 165) {
+       this.vel.z *= - 1;
+       this.pos.z = 165;
+       collisionSound.play();
+    }
+    this.light.position.copy (this.puck.position);
+  	this.light.position.y += 12;
+    this.puck.position.copy (this.pos);
+  }
+}
+
+// 牆壁類別/////////////////////////////////////////////////////
+class Wall {
+
+  constructor(wallWidth, wallHeigh, wallDepth, wallPositionX, wallPositionZ) {
+    this.wallColor = new THREE.MeshPhongMaterial({color: 0xc7c7c7})
+    this.wallWidth = wallWidth;
+    this.wallHeigh = wallHeigh;
+    this.wallDepth = wallDepth;
+    this.wall = new THREE.Mesh (new THREE.BoxGeometry(this.wallWidth,this.wallHeigh, this.wallDepth), this.wallColor);
+    this.wallY = 20;
+    this.wall.position.set(wallPositionX, this.wallY, wallPositionZ);
+  }
+
+  createWall(scene) {
+    scene.add(this.wall);
+  }
+
+}
+
+// 碰撞公式部分計算///////////////////////////////////////////////
+function puckColl (b1, b2) {
+    var dis = b1.pos.distanceTo(b2.pos);
+
+    if(dis <= 2 * R) {
+      var nx2 = new THREE.Vector3();
+      var s13 = new THREE.Vector3();
+      var nx1 = new THREE.Vector3();
+      var s23 = new THREE.Vector3();
+
+      var s11 = step1(b1.vel, b2.vel, b1.pos, b2.pos);
+      var s12 = step2(b1.pos, b2.pos);
+      var s21 = step1(b2.vel, b1.vel, b2.pos, b1.pos);
+      var s22 = step2(b2.pos, b1.pos);
+      var s11ds12 = s11 / s12;
+      var s21ds22 = s21 / s22;
+      s11ds12 *= -1;
+      s21ds22 *= -1;
+
+      nx2.copy(b2.pos);
+      nx1.copy(b1.pos);
+      nx2.negate();
+      nx1.negate();
+      s13.addVectors(b1.pos, nx2);
+      s23.addVectors(b2.pos, nx1);
+
+      s13.x *= s11ds12;
+      s13.y *= s11ds12;
+      s23.x *= s21ds22;
+      s23.y *= s21ds22;
+
+      b1.vel = new THREE.Vector3().addVectors(b1.vel, s13);
+      b2.vel = new THREE.Vector3().addVectors(b2.vel, s23);
+			
+      collisionSound.play();
+
+    }
+  }
+function step1(v1, v2, x1, x2) {
+
+  var vpv = new THREE.Vector3();
+  var xpx = new THREE.Vector3();
+  var nv2 = new THREE.Vector3();
+  var nx2 = new THREE.Vector3();
+  nv2.copy(v2);
+  nx2.copy(x2);
+  vpv = vpv.addVectors(v1 , nv2.negate());
+  xpx = xpx.addVectors(x1 , nx2.negate());
+  return vpv.dot(xpx);
+  
+}
+function step2(x1, x2) {
+
+  var pAll = new THREE.Vector3();
+  var nx2 = new THREE.Vector3();
+
+  var c1 = new THREE.Vector3();
+  var c2 = new THREE.Vector3();
+
+  nx2.copy(x2);
+  nx2.negate();
+
+  c1.copy(x1);
+  c2.copy(nx2);
+
+  c1.add(nx2);
+  var cr = c1.lengthSq();
+  return cr;
+
+}
+
+////////////////////////////////////////////////////////////////////////
+init();
+animate();
+
+function init() {
+
+	// 聲音
+  collisionSound = document.getElementById ('collisionsound');
+  
+  // 畫面///////////////////////////////////////////////////////////////
+  scene = new THREE.Scene();
+
+  renderer = new THREE.WebGLRenderer();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x888888);
+  document.body.appendChild(renderer.domElement);
+
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
+  camera.position.set (0,400,500);
+  let controls = new THREE.OrbitControls(camera, renderer.domElement);
+  
+  // 場景內燈光
+  const lightInside = new THREE.PointLight( 0xffffff, 20);
+  lightInside.position.set(-100, 50, -100);
+  // 輔助燈光
+  const pointLightHelper = new THREE.PointLightHelper( lightInside, 20);
+	scene.add( pointLightHelper );
+  // 環境光
+  const lightBackGround = new THREE.AmbientLight( 0x000000 ); // soft white light
+  scene.add( lightBackGround );
+  
+  // 顯示坐標軸
+  //var axes = new THREE.AxesHelper(20);
+  //scene.add(axes);
+  
+  // 地板/////////////////////////////////////////////////////
+  var floor = new THREE.Mesh (new THREE.BoxGeometry(350,20,350), new THREE.MeshPhongMaterial({color: 0x5a5c5a}));
+  floor.position.y = -10;
+  scene.add (floor);
+  
+  // 牆壁/////////////////////////////////////////////////////
+  var wall1 = new Wall(350, 80, 20, 0, 185);
+  wall1.createWall(scene);
+  
+  var wall2 = new Wall(20, 80, 390, 185, 0);
+  wall2.createWall(scene);
+  
+  var wall3 = new Wall(350, 80, 20, 0, -185);
+  wall3.createWall(scene);
+  
+  var wall4 = new Wall(20, 80, 390, -185, 0);
+  wall4.createWall(scene);
+  
+
+  // 圓盤/////////////////////////////////////////////////////
+  // 圓盤1
+  let puck = new Puck(173/360, -50, 100, -2, -10);
+  puck.createPuck(scene);
+  pucks.push(puck);
+ 	// 圓盤2
+  let puck2 = new Puck(298/360, -20, 10, 5, -1);
+  puck2.createPuck(scene);
+  pucks.push(puck2);
+  // 圓盤3
+  let puck3 = new Puck(93/360, 15, -100, 10, -20);
+  puck3.createPuck(scene);
+  pucks.push(puck3);
+  // 圓盤4
+  let puck4 = new Puck(200/360, -50, -100, -2, 2);
+  puck4.createPuck(scene);
+  pucks.push(puck4);
+  // 圓盤5
+  let puck5 = new Puck(10/360, -30, 0, 8, 2);
+  puck5.createPuck(scene);
+  pucks.push(puck5);
+}
+
+function animate() {
+  var dt = 0.1;
+  for (let i = 0; i < pucks.length; i++)
+  	pucks[i].update (dt);
+  for (let i = 0; i < pucks.length; i++)
+  	for (let j = 0; j < pucks.length; j++)
+    	if(i != j) puckColl(pucks[i], pucks[j]);
+
+	requestAnimationFrame(animate);
+  render();
+
+}
+
+function render() {
+
+  renderer.render(scene, camera);
+
+}
+
+</script>
+</body>
+
+</html>

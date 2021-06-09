@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+<style>
+#info {
+  position: absolute;
+  top: 0px;
+  width: 100%;
+  padding: 10px;
+  text-align: center;
+  color: #ffff00
+}
+
+body {
+  overflow: hidden;
+}
+</style>
+</head>
+
+<body>
+<div id="info">Minecraft Steve
+<br>
+<br>
+<button id="switchView">Switch View</button>
+</div>
+<script src="https://threejs.org/build/three.min.js"></script>
+<script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+<script src="https://jyunming-chen.github.io/tutsplus/js/KeyboardState.js"></script>
+<script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+<script src="keyframe.js"></script>
+<script src="modul.js"></script>
+<script>
+var camera, scene, renderer;
+/////////////////////////////////////////////
+const w = 6.2;
+const h1 = 19.1;
+const ww = 1;
+const hh = 3;
+const UU = 14*ww;
+const VV = hh + 5*ww;
+var icon;
+var torso, head, lArm, lLeg, rArm, rLeg;
+var theta1 = 0, theta2 = 0;
+var viewSwitch = false;
+// hw3 var
+var keyboard = new KeyboardState();
+var clock = new THREE.Clock();
+var ts;
+var intkey;
+var state;
+
+////////////////////////////////////////////
+
+init();
+animate();
+
+// 按下Button
+$("#switchView").click(function() {
+  viewSwitch = !viewSwitch;
+});
+
+function init() {
+
+  scene = new THREE.Scene();
+
+  renderer = new THREE.WebGLRenderer();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x888888);
+  document.body.appendChild(renderer.domElement);
+  
+  var axes = new THREE.AxesHelper(20);
+  scene.add(axes);
+
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
+  camera.position.z = 300;
+  camera.position.y = 200;
+  let controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+  ////////////////////////////////////////////////////////////////
+  var gridXZ = new THREE.GridHelper(200, 20, 'red', 'white');
+  scene.add(gridXZ);
+  
+  buildSteve();
+  state = 'Stand';
+  ts = clock.getElapsedTime();
+  power = 0.0;
+  angle = 0.0;
+}
+
+function animate() {
+  
+  if(viewSwitch) {
+    let cameraPos = new THREE.Vector3(0,8*w,-14*w);
+    head.localToWorld (cameraPos);
+    camera.position.copy (cameraPos);
+  }
+  let cameraLookAt = new THREE.Vector3(0,2*w,0);
+  head.localToWorld (cameraLookAt);
+  if(viewSwitch) camera.lookAt (cameraLookAt);
+  
+  keyboard.update();
+  if(keyboard.down('space')) {
+  	ts = clock.getElapsedTime(); // move ts to start of stand
+    state = 'S2W';
+  }
+  if(keyboard.up('space')) {
+  	ts = clock.getElapsedTime();
+  	state = 'W2S';
+  	poseW2S0 = {
+      lThigh: intKey[0],
+      rThigh: intKey[1]
+    };
+    keysW2S = [
+      [0, poseW2S0],
+      [0.5, poseW2S1],
+      [1, poseW2S2],
+    ];
+  }
+  
+  let dt = clock.getDelta();
+  torso.rotation.y = -Math.PI / 2
+  
+  switch (state) {
+    case 'Stand':
+      intKey = keyframeStand(clock.getElapsedTime(), TStand);
+      break;
+    case 'S2W':
+      intKey = keyframeS2W(clock.getElapsedTime(), TS2W);
+      break;
+    case 'Walk':
+      intKey = keyframeWalk(clock.getElapsedTime(), TWalk);
+      break;
+     case 'W2S':
+      intKey = keyframeW2S(clock.getElapsedTime(), TW2S);
+      break;
+  }
+  
+  lLeg.rotation.x = intKey[0];
+  rLeg.rotation.x = intKey[1];
+  lArm.rotation.x = intKey[1];
+  rArm.rotation.x = intKey[0];
+  
+  // move
+  let vel = 50;
+  if(state == 'Walk') {
+  	torso.position.x -= vel*dt;
+    if(!viewSwitch) {
+    	camera.position.x = torso.position.x;
+    	camera.lookAt(torso.position.x, 0, 0);
+    }
+  }
+  
+  
+  requestAnimationFrame(animate);
+  render();
+  
+}
+
+function render() {
+
+  renderer.render(scene, camera);
+
+}
+</script>
+</body>
+
+</html>

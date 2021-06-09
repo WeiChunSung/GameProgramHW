@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+<style>
+#info {
+  position: absolute;
+  top: 0px;
+  width: 100%;
+  padding: 10px;
+  text-align: center;
+  color: #ffff00
+}
+
+body {
+  overflow: hidden;
+}
+</style>
+</head>
+
+<body>
+<div id="info">Simple Path Following
+</div>
+<script src="https://threejs.org/build/three.min.js"></script>
+<script src="Path.js"></script>
+<script src="Agent.js"></script>
+<script>
+// IIFE addition of clamp function
+( function( ) {
+      Math.clamp = function(val,min,max) {
+          return Math.min(Math.max(val,min),max);
+      } 
+} )();
+
+function findNbhd(agents) {
+  let i, j, dst;
+  let nAgents = agents.length;
+  
+  // 這樣的 double-for-loop對嗎？
+  agents.forEach(function(agent){agent.nbhd=[]});
+  
+  for (i = 0; i < nAgents - 1; i++) {
+    for (j = i + 1; j < nAgents; j++) {
+      dst = agents[i].pos.distanceTo(agents[j].pos);
+      if (dst < 5) { // NBHD = 20
+        agents[i].addNbr(agents[j]);
+        agents[j].addNbr(agents[i]);
+      }
+    }
+  }
+}
+
+/////////////////////////////////////////////////////////
+var camera, scene, renderer;
+var agents = [];
+var radius;
+
+init();
+animate();
+
+function init() {
+  renderer = new THREE.WebGLRenderer({
+    antialias: true
+  });
+
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x888888);
+  document.body.appendChild(renderer.domElement);
+
+  scene = new THREE.Scene();
+  camera = new THREE.OrthographicCamera(-50, 50, 50, -50, -10, 100);
+  camera.position.z = 10;
+
+	let grid = new THREE.GridHelper (100,10, 'red','white');
+  grid.rotation.x = -Math.PI/2;
+  scene.add (grid);
+ 
+/////////////////////////////////////////////////////////
+	radius = 4;
+  
+  let pS = new THREE.Vector3(-50, 0, 0);
+  let pE = new THREE.Vector3(0, 10, 0);
+  let pathLeft = new Path(pS, pE, radius);
+  
+  
+  pS = new THREE.Vector3(0, 10, 0);
+	pE = new THREE.Vector3(25, -10, 0);
+  let pathCenter = new Path(pS, pE, radius);
+  
+  pS = new THREE.Vector3(25, -10, 0);
+	pE = new THREE.Vector3(50, 0, 0);
+  let pathRight = new Path(pS, pE, radius);
+  
+  pathLeft.create();
+  pathCenter.create();
+  pathRight.create();
+  
+  //////////////////////////////////////
+  
+  setTimeout (addAgents,0);
+  
+}
+
+function addAgents() {
+	let randColor = Math.random()*0xffffff;
+  let circle = new THREE.Mesh (new THREE.CircleGeometry(1,20), new THREE.MeshBasicMaterial({color:randColor}));
+
+	let pos = new THREE.Vector3(-50,(-1+Math.random()*2)*3,0);
+	let agent = new Agent (pos, circle);
+  agent.vel.set (2,0,0);
+  agents.push (agent);
+  
+  if (agents.length < 20)
+  	setTimeout (addAgents, 1000);
+}
+
+
+function animate() {
+  requestAnimationFrame(animate);
+  render();
+  
+  findNbhd(agents);
+  
+  let dt = 0.1;
+  agents.forEach (function(agent) {
+  	agent.update(dt)
+    if(agent.vel.x < agent.MAXSPEED - 2) agent.vel.x += 1;
+  	if (agent.pos.x > 50) 
+    	agent.pos.x = -50;
+  });
+  
+}
+
+function render() {
+  renderer.render(scene, camera);
+}
+</script>
+</body>
+
+</html>
